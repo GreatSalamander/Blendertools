@@ -98,9 +98,14 @@ def editWidget(active_bone):
     armature = active_bone.id_data
     bpy.ops.object.mode_set(mode='OBJECT')
     C.active_object.select = False
-    visibleLayers = numpy.array(bpy.context.scene.layers)+widget.layers-armature.layers
-
-    bpy.context.scene.layers = visibleLayers.tolist()    
+    
+    if C.space_data.lock_camera_and_layers == False :
+        visibleLayers = numpy.array(bpy.context.space_data.layers)+widget.layers-armature.layers
+        bpy.context.space_data.layers = visibleLayers.tolist()   
+        
+    else :
+        visibleLayers = numpy.array(bpy.context.scene.layers)+widget.layers-armature.layers
+        bpy.context.scene.layers = visibleLayers.tolist()   
     
     if C.space_data.local_view :
         bpy.ops.view3d.localview()
@@ -117,10 +122,15 @@ def returnToArmature(widget):
     
     if C.active_object.mode == 'EDIT':
         bpy.ops.object.mode_set(mode='OBJECT')
-    visibleLayers = numpy.array(bpy.context.scene.layers)-widget.layers+armature.layers
-    bpy.context.scene.layers = visibleLayers.tolist()
     
-    
+    if C.space_data.lock_camera_and_layers == False :
+        visibleLayers = numpy.array(bpy.context.space_data.layers)-widget.layers+armature.layers
+        bpy.context.space_data.layers = visibleLayers.tolist()   
+        
+    else :
+        visibleLayers = numpy.array(bpy.context.scene.layers)-widget.layers+armature.layers
+        bpy.context.scene.layers = visibleLayers.tolist()   
+       
     if C.space_data.local_view :
         bpy.ops.view3d.localview()
     bpy.context.scene.objects.active = armature
