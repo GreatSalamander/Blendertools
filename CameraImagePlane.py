@@ -15,18 +15,12 @@ import os
 from bpy.types import Menu, Panel, UIList, PropertyGroup
 from bpy.props import StringProperty, BoolProperty, FloatProperty, CollectionProperty, BoolVectorProperty, PointerProperty
 
-empty = ''
-plane =''
-
-imagePlaneList = []
 
 def create_empty(name,parent):
     plane =bpy.data.objects.new(name,None)
     plane.empty_draw_type ='IMAGE'
     plane.empty_image_offset=[-0.5,-0.5]
     plane.empty_draw_size=1.0
-    
-    bpy.context.scene.objects.link(plane)
         
     if not plane.get('_RNA_UI') :
         plane['_RNA_UI'] = {}
@@ -137,12 +131,21 @@ class imagePlane_thumbnail(bpy.types.Operator):
         imagePlaneOb.location=imagePlaneOb.location
 
         return {'FINISHED'}
-        
-class CIP_ImagesSettings(PropertyGroup):
+
+
+class cameraImagePlane_list(PropertyGroup):
+    imagePlane = StringProperty(name="imagePlane")
+
+ 
+    
+class cameraImagePlane(PropertyGroup):
     show_image = BoolProperty(name="Show Image", default=True)
     show_expanded = BoolProperty(name="Show Expanded", default=True)
     thumbnail = BoolProperty(name="Thumbnail", default=False)
+    
+    #imagePlane_list = CollectionProperty(type=cameraImagePlane_list)
 
+    
 class removeCreateCameraImagePlane(bpy.types.Operator):
     """Remove mesh plane"""
     bl_idname = "remove.camera_image_plane"
@@ -156,13 +159,20 @@ class removeCreateCameraImagePlane(bpy.types.Operator):
 
     def execute(self, context):
         imagePlane = self.property 
-        imagePlaneList = eval(bpy.context.scene.imagePlaneList)
-        imagePlaneList.remove(imagePlane)
-        bpy.context.scene.imagePlaneList = str(imagePlaneList)
+        imagePlaneList = bpy.context.object.data.CameraImagePlane.get("cameraImagePlane_list")
         
-        exec("del bpy.types.Scene.%s"%imagePlane)
+        if not imagePlaneList :
+            imagePlaneList = []
+        
+        imagePlaneList.remove(imagePlane)
+        bpy.context.object.data.CameraImagePlane["cameraImagePlane_list"] = imagePlaneList
+        
         bpy.context.scene.objects.unlink(bpy.context.scene.objects.get(imagePlane))
         bpy.context.scene.objects.unlink(bpy.context.scene.objects.get(imagePlane+'_target'))
+        
+        bpy.data.objects.remove(bpy.data.objects.get(imagePlane))
+        bpy.data.objects.remove(bpy.data.objects.get(imagePlane+'_target'))
+        
         return {'FINISHED'}
         
         
@@ -171,8 +181,8 @@ class addCameraImagePlane(bpy.types.Operator):
     bl_idname = "add.camera_image_plane"
     bl_label = "Add Camera Image Plane"
     bl_options = {'REGISTER', 'UNDO'}
+    
     property = bpy.props.StringProperty()
-    bl_context = "scene"
     # -----------
     # File props.
     files = CollectionProperty(type=bpy.types.OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
@@ -184,11 +194,16 @@ class addCameraImagePlane(bpy.types.Operator):
         return (context.object and context.object.type == 'CAMERA' or context.space_data.region_3d.view_perspective == 'CAMERA')
 
     def execute(self, context):
-        imagePlane = self.property
-        
+       
         import_list, directory = self.generate_paths()
             
-        camera = bpy.context.scene.camera
+        if context.object.type == 'CAMERA' :
+            camera = bpy.context.object
+        else :
+            camera = bpy.context.scene.camera
+        
+        cameraName = camera.name.replace('.','_').replace('-','_')
+        
         offset = 8
         
         for path in import_list :
@@ -202,7 +217,7 @@ class addCameraImagePlane(bpy.types.Operator):
                 image = bpy.data.images.load(directory+path)
                 image.name = os.path.splitext(path)[0].replace('.','_').replace('-','_')[0:30]
             
-            imagePlaneName = "IP_%s_%s"%(camera.name,image.name[0:30])
+            imagePlaneName = "IP_%s_%s"%(cameraName,image.name)
             
             if bpy.data.objects.get(imagePlaneName) :
                 bpy.data.objects.get(imagePlaneName).name+="_copy"
@@ -214,15 +229,16 @@ class addCameraImagePlane(bpy.types.Operator):
             empty.parent = camera
                 
             plane = create_empty(imagePlaneName,empty)          
-                        
+            bpy.context.scene.objects.link(plane)
+           
             plane.data = image
             plane.data.update()
-            
+            plane.show_transparent = True
             plane.image_user.frame_duration = image.frame_duration
             plane.image_user.use_auto_refresh = True
             plane.image_user.frame_start = bpy.context.scene.frame_start
-            
             plane.parent = empty
+
             empty.empty_draw_size = 0.02
             empty.empty_draw_type = 'SINGLE_ARROW'
             empty.lock_location=[True,True,False]
@@ -235,12 +251,15 @@ class addCameraImagePlane(bpy.types.Operator):
             imagePlane=plane.name
                         
             bpy.context.scene.update()
-            exec("bpy.types.Scene.%s = PointerProperty(type=CIP_ImagesSettings)"%imagePlane)
             
-            imagePlaneList = eval(bpy.context.scene.imagePlaneList)
+            imagePlaneList = bpy.context.object.data.CameraImagePlane.get("cameraImagePlane_list")
+            
+            if not imagePlaneList :
+                imagePlaneList = []
+            
             imagePlaneList.append(imagePlane)
-            bpy.context.scene.imagePlaneList = str(imagePlaneList)
-        
+            bpy.context.object.data.CameraImagePlane["cameraImagePlane_list"] = imagePlaneList
+
         return {'FINISHED'}
 
     def invoke(self, context, event):
@@ -251,7 +270,7 @@ class addCameraImagePlane(bpy.types.Operator):
     def generate_paths(self):
         return (fn.name for fn in self.files), self.directory
 
-
+        
 class CameraMoviePlanePanel(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -273,70 +292,77 @@ class CameraMoviePlanePanel(bpy.types.Panel):
         
         row.operator("add.camera_image_plane", emboss=True, text="Add Camera Plane",icon="RENDER_RESULT")
         
-        for imagePlane in eval(context.scene.imagePlaneList) :
-            box = layout.box()
-            col = box.column()
-            row = col.row(align=True)
+        if context.object.type == 'CAMERA' :
+            camera = bpy.context.object.data
+        else :
+            camera = bpy.context.scene.camera.data
             
-            eval("context.scene.%s"%imagePlane)
-            imagePlaneProp = eval("context.scene.%s"%imagePlane)
-            imagePlaneOb = bpy.data.objects.get(imagePlane)
-            
-            if imagePlaneProp.show_expanded == True :
-                show_icon = "TRIA_DOWN"
-            else :
-                show_icon = "TRIA_RIGHT"            
-            
-            row.prop(imagePlaneProp,"show_expanded" ,emboss=False, text="",icon = show_icon)
-            row.label(text = imagePlane)
-
-            if imagePlaneOb["thumbnail"] == 0 :
-                show_icon = "FULLSCREEN_EXIT"
-            else :
-                show_icon = "FULLSCREEN_ENTER"
-            
-            row.operator("image_plane.thumbnail",emboss=False,text="",icon = show_icon).property = imagePlane
-            
-            if imagePlaneProp.show_image == True :
-                show_icon = "RESTRICT_VIEW_OFF"
-            else :
-                show_icon = "RESTRICT_VIEW_ON"
+        if camera.CameraImagePlane.get('cameraImagePlane_list'):
+            for imagePlane in camera.CameraImagePlane['cameraImagePlane_list'] :
+                box = layout.box()
+                col = box.column()
+                row = col.row(align=True)
                 
-            row.prop(imagePlaneOb,"hide" ,emboss=False, text="",icon = show_icon)
-            row.operator("remove.camera_image_plane", emboss=False, text="",icon = "X").property = imagePlane
-            
-            if imagePlaneProp.show_expanded == True :
-                row = col.row()
-                row.prop(imagePlaneOb.parent,'["distance"]',text = "Distance")
-
-                row = col.row()
-                if imagePlaneOb["thumbnail"] ==False:
-                    row.prop(imagePlaneOb,'["size"]',text = "Size")
-                    row = col.row()
-                    row.prop(imagePlaneOb,'["offset_X"]',text = "X")
-                    row.prop(imagePlaneOb,'["offset_Y"]',text = "Y")                    
+                #eval("context.scene.%s"%imagePlane)
+                imagePlaneProp = camera.CameraImagePlane
+                imagePlaneOb = bpy.data.objects.get(imagePlane)
                 
+                if imagePlaneProp.show_expanded == True :
+                    show_icon = "TRIA_DOWN"
                 else :
-                    row.prop(imagePlaneOb,'["thumbnail_size"]',text = "Size")
-                    row = col.row()
-                    row.prop(imagePlaneOb,'["thumbnail_offset_X"]',text = "X")
-                    row.prop(imagePlaneOb,'["thumbnail_offset_Y"]',text = "Y")
+                    show_icon = "TRIA_RIGHT"            
                 
-                if imagePlaneOb.data.frame_duration>1 :
-                    row = col.row()
-                    row.prop(imagePlaneOb.image_user,"frame_start",text = "Start")
+                row.prop(imagePlaneProp,"show_expanded" ,emboss=False, text="",icon = show_icon)
+                row.label(text = imagePlane)
+
+                if imagePlaneOb["thumbnail"] == 0 :
+                    show_icon = "FULLSCREEN_EXIT"
+                else :
+                    show_icon = "FULLSCREEN_ENTER"
                 
-                row = col.row()
-                row.prop(imagePlaneOb,'["transparency"]',text = "Transparency",slider=True)
+                row.operator("image_plane.thumbnail",emboss=False,text="",icon = show_icon).property = imagePlane
+                
+                if imagePlaneProp.show_image == True :
+                    show_icon = "RESTRICT_VIEW_OFF"
+                else :
+                    show_icon = "RESTRICT_VIEW_ON"
+                    
+                row.prop(imagePlaneOb,"hide" ,emboss=False, text="",icon = show_icon)
+                row.operator("remove.camera_image_plane", emboss=False, text="",icon = "X").property = imagePlane
+                
+                if imagePlaneProp.show_expanded == True :
+                    row = col.row()
+                    row.prop(imagePlaneOb.parent,'["distance"]',text = "Distance")
+
+                    row = col.row()
+                    if imagePlaneOb["thumbnail"] ==False:
+                        row.prop(imagePlaneOb,'["size"]',text = "Size")
+                        row = col.row()
+                        row.prop(imagePlaneOb,'["offset_X"]',text = "X")
+                        row.prop(imagePlaneOb,'["offset_Y"]',text = "Y")                    
+                    
+                    else :
+                        row.prop(imagePlaneOb,'["thumbnail_size"]',text = "Size")
+                        row = col.row()
+                        row.prop(imagePlaneOb,'["thumbnail_offset_X"]',text = "X")
+                        row.prop(imagePlaneOb,'["thumbnail_offset_Y"]',text = "Y")
+                    
+                    if imagePlaneOb.data.frame_duration>1 :
+                        row = col.row()
+                        row.prop(imagePlaneOb.image_user,"frame_start",text = "Start")
+                    
+                    row = col.row()
+                    row.prop(imagePlaneOb,'["transparency"]',text = "Transparency",slider=True)
 
 
 def register():
-    bpy.types.Scene.imagePlaneList = StringProperty(default='[]')
+    
     bpy.utils.register_module(__name__)
+    bpy.types.Camera.CameraImagePlane = bpy.props.PointerProperty(type=cameraImagePlane)
 
 def unregister():
     bpy.utils.unregister_module(__name__)
-    del bpy.types.Scene.imagePlaneList 
+    del bpy.types.Camera.CameraImagePlane 
 
 
 
