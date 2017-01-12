@@ -24,15 +24,16 @@ class GPtools_clearHideGP(bpy.types.Operator):
         
         cam = bpy.context.scene.camera
         cam_coord = cam.matrix_world.to_translation()
-
-        GP_layer = bpy.data.grease_pencil['GPencil'].layers['GP_Layer']
-
+        
+        GP = bpy.context.scene.grease_pencil
+        GP_layer = GP.layers.active
+        
         for stroke in GP_layer.active_frame.strokes :   
                 
             for point in stroke.points :
                 point.select = False
-                ray = bpy.context.scene.ray_cast(cam_coord,point.co-cam_coord)[1]
-                
+                ray = bpy.context.scene.ray_cast(cam_coord,point.co-cam_coord,((point.co-cam_coord).length)+0.1)[1]
+                print(bpy.context.scene.ray_cast(cam_coord,point.co-cam_coord))
                 if ray[0] :
                     dif = (point.co-cam_coord)-(ray-cam_coord)
                     
