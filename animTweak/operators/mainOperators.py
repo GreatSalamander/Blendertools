@@ -3,20 +3,58 @@ import bpy
 from ..functions import apply_pose
 from ..functions import reset_props
 from ..functions import insert_keyframe
+from ..functions import store_props
 
 
 class ApplyPose(bpy.types.Operator):
     bl_label = "Apply Pose Custom"
     bl_idname = "poselib.apply_pose_custom"
+    bl_options = {'REGISTER', 'UNDO'}
 
-    pose_index = bpy.props.IntProperty()
-    opacity = bpy.props.FloatProperty()
+    pose_index = bpy.props.IntProperty(options={'HIDDEN'})
+    blend = bpy.props.FloatProperty(name="Blend : ",min=0,max=1,default = 1.0)
 
     def execute(self,context):
-    	print(self.pose_index)
-    	apply_pose(self.pose_index,self.opacity,context)
-    	return({'FINISHED'})
+        apply_pose(self.pose_index,self.blend,context)
 
+        return {'FINISHED'}
+
+class StoreNonZeroValue(bpy.types.Operator) :
+    """ Store Non Zero Value
+    """
+    bl_idname = "store.non_zero_value"
+    bl_label = "Store Custom Prop value"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return (context.active_object != None and context.active_object.type == 'ARMATURE')
+
+    def execute(self, context):
+        ob = context.object
+        store_props(ob)
+
+        return {'FINISHED'}
+
+'''
+class RefreshPoseLib(bpy.types.Operator) :
+    """ Refresh PoseLib List
+    """
+    bl_idname = "refresh.poselib"
+    bl_label = "Refresh PoseLib List"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return (context.active_object != None and context.active_object.type == 'ARMATURE')
+
+    def execute(self, context):
+        ob = context.object
+        refresh_poseLib(ob)
+
+        return {'FINISHED'}
+
+'''
 class ResetProps(bpy.types.Operator) :
     """ Reset Transfrom And Props.
     """
