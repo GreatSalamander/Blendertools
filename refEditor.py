@@ -60,7 +60,7 @@ def link_analyser(objects,Path) :
 
 
 class refEditorSettings(bpy.types.PropertyGroup):
-    search = bpy.props.StringProperty()
+    search = bpy.props.StringProperty(options={'TEXTEDIT_UPDATE'})
     filterSelect = bpy.props.BoolProperty()
     objects = {}
 
