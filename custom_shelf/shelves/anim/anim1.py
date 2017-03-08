@@ -1,14 +1,15 @@
 
 
-a = 'toto'
-b = 'tata'
-
+variables =  {
+'a' : 'toto',
+'b' : 'tata',
+}
 
 import bpy
 
 
-def main(a,b) :
+def main(variables) :
 
-    print(a,b)
+    print(variables['a'],variables['b'])
 
-main(a,b)
+main(variables)

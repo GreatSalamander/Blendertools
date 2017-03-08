@@ -6,36 +6,60 @@ bl_info = {
     "category": "User"}
 
 from . import operators
-from . import UI
+from . import shelves
 
 import bpy
 import os
+import glob
 from bpy.app.handlers import persistent
+from bl_ui.space_info import INFO_HT_header,INFO_MT_editor_menus
+
 
 
 class CustomShelfRunFunction(bpy.types.Operator):
     bl_idname = "customshelf.run_function"
     bl_label = "Run Function"
 
+
+    #variables = {}
     script = bpy.props.StringProperty()
     folder = bpy.props.StringProperty()
+    #variables = bpy.props.PointerProperty(type = bpy.types.PropertyGroup)
+
 
     def execute(self,context) :
-        print(self.folder,self.script)
-        #addon_prefs = bpy.context.user_preferences.addons[__name__].preferences.presets
-        global_shelves = os.path.join(os.path.dirname(__file__),'shelves')
-        pyFile = os.path.join(global_shelves,self.folder,self.script+'.py')
+        exec('from .shelves.%s import %s'%(self.folder,self.script))
+        for v in self.variables :
+            self.variables[v] = context.scene.CustomShelfVars[v]
 
+        exec('%s.main(%s)'%(self.script,self.variables))
 
-
-        variables= {}
-        def local() :
-            exec(open(pyFile).read(), globals())
-
-            print(globals)
-            #print (variables) # globals from the someFile module
-        local()
         return {'FINISHED'}
+
+
+    def invoke(self, context, event):
+        exec('from .shelves.%s import %s'%(self.folder,self.script))
+        #self.variables['variables'] = exec('%s.variables'%self.script)
+        self.variables = eval('%s.variables'%self.script)
+
+        #context.scene.CustomShelfVars={}
+        for key,value in self.variables.items() :
+            print(key,value)
+            setattr(CustomShelfVariables, key, bpy.props.StringProperty())
+            exec('context.scene.CustomShelfVars.%s="%s"'%(key,value))
+
+        #context.scene.CustomShelfVars.a='toto'
+
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column()
+
+        for key in self.variables :
+            col.prop(context.scene.CustomShelfVars, key, expand=True)
+
+
 
 '''
 oldPreset = {}
@@ -58,11 +82,18 @@ def read_preset():
 '''
 
 def read_shelves() :
-    Folder = os.path.join(os.path.dirname(__file__),'shelves')
+    path = os.path.join(os.path.dirname(__file__),'shelves')
     shelves = {}
-    for s in os.listdir(Folder) :
-        shelves[s] = [os.path.splitext(p)[0] for p in os.listdir(os.path.join(Folder,s))]
 
+    files = glob.glob(path+'/*/*.py')
+
+    for f in files :
+        category = os.path.basename(os.path.dirname(f))
+        name = os.path.splitext(os.path.basename(f))[0]
+        if not shelves.get(category):
+            shelves[category] = []
+        if name!='__init__' :
+            shelves[category].append(name)
 
     return(shelves)
 
@@ -94,7 +125,7 @@ bpy.props.StringProperty()
         row = layout.row(align=True)
         row.template_header()
 
-        UI.INFO_MT_editor_menus.draw_collapsible(context, layout)
+        INFO_MT_editor_menus.draw_collapsible(context, layout)
 
         if window.screen.show_fullscreen:
             layout.operator("screen.back_to_previous", icon='SCREEN_BACK', text="Back to Previous")
@@ -161,7 +192,7 @@ def apply_UI(register,unregister):
             if pt.bl_space_type == 'INFO' :
                 if "bl_rna" in pt.__dict__:   # <-- check if we already removed!
                     bpy.utils.unregister_class(pt)
-                    bpy.utils.register_class(UI.INFO_HT_header)
+                    bpy.utils.register_class(INFO_HT_header)
 
 
     if register == True :
@@ -223,10 +254,14 @@ class CustomShelfSettings(bpy.types.PropertyGroup) :
         for p in sorted(items):
             exec('%s = bpy.props.BoolProperty(name="%s")'%(p,p))
 
+class CustomShelfVariables(bpy.types.PropertyGroup) :
+    pass
+
 
 
 def register():
     #bpy.utils.unregister_class(INFO_HT_header)
+    bpy.utils.register_class(CustomShelfVariables)
     bpy.utils.register_class(CustomShelfRunFunction)
     bpy.utils.register_class(operators.DisplayStatistics)
     bpy.utils.register_class(CustomShelfPrefs)
@@ -234,6 +269,7 @@ def register():
 
 
     bpy.types.Scene.CustomShelf = bpy.props.PointerProperty(type= CustomShelfSettings)
+    bpy.types.Scene.CustomShelfVars = bpy.props.PointerProperty(type= CustomShelfVariables)
 
     try :
         apply_UI(True,True)
@@ -246,9 +282,12 @@ def register():
 
 def unregister():
     del bpy.types.Scene.CustomShelf
+    del bpy.types.Scene.CustomShelfVars
     apply_UI(False,True)
+
+    bpy.utils.unregister_class(CustomShelfVariables)
     bpy.utils.unregister_class(CustomShelfPrefs)
     bpy.utils.unregister_class(CustomShelfSettings)
     bpy.utils.unregister_class(operators.DisplayStatistics)
-    #bpy.utils.unregister_class(my_INFO_HT_header)
+    bpy.utils.unregister_class(CustomShelfRunFunction)
     bpy.app.handlers.load_post.remove(apply_UI_handler)

@@ -8,6 +8,7 @@ def draw_stats(self,context) :
         width = context.region.width
         height = context.region.height
 
+
         stat = context.scene.statistics().split('|')
         stat[0]= stat[-1]
         stat.pop(-1)
@@ -18,35 +19,29 @@ def draw_stats(self,context) :
 
             text = s.split(':')
             font_id = 1
-            blf.size(font_id, font_size, 72)
-            if len(text)>1:
-                #bgl.glColor3f(.13,.55,.31)
-                #bgl.glColor3f(.5,.7,.8)
-                bgl.glColor4f(1,.667,.251,1)
 
-            else :
-                bgl.glColor4f(.9,.9,.9,1)
+            if len(text)> 1 :
 
-            Dimension = blf.dimensions(font_id, context.scene.statistics())
-            dimension = blf.dimensions(font_id, text[0])
+                blf.size(font_id, font_size, context.user_preferences.system.dpi)
+                bgl.glColor4f(0,0,0,1)
 
-            #blf.position(1, (width - dimension[0]-10), (height-dimension[1]-4), 0)
-            blf.position(font_id, (width/2-Dimension[0]/2+space), (height-font_size-2), 0)
-            if len(text)>1:
+                Dimension = blf.dimensions(font_id, context.scene.statistics())
+                dimension = blf.dimensions(font_id, text[0])
+
+                #blf.position(1, (width - dimension[0]-10), (height-dimension[1]-4), 0)
+                blf.position(font_id, (width/2-Dimension[0]/2+space), (height-font_size-2), 0)
                 typo = text[0]+':'
-            else :
-                typo = text[0]
 
-            blf.shadow(font_id, 3, 0, 0, 0, .6)
-            blf.draw(font_id,typo)
-            space+= dimension[0]+10
 
-            if len(text)>1:
-                bgl.glColor4f(.8,.8,.8,1)
+                blf.draw(font_id,typo)
+                blf.shadow(font_id, 3, 1, 1, 1, .3)
+                space+= dimension[0]+10
+
+                bgl.glColor4f(1,1,1,1)
                 dimension = blf.dimensions(font_id, text[1])
                 #blf.position(1, (width - dimension[0]-10), (height-dimension[1]-4), 0)
                 blf.position(font_id, (width/2-Dimension[0]/2+space), (height-font_size-2), 0)
-                blf.shadow(font_id, 3, 0, 0, 0, .6)
+                blf.shadow(font_id, 3, 0, 0, 0, .3)
                 blf.draw(font_id, text[1])
                 space+= dimension[0]
 
