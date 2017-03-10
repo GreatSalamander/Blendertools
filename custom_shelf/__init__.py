@@ -13,8 +13,8 @@ import os
 import glob
 from bpy.app.handlers import persistent
 from bl_ui.space_info import INFO_HT_header,INFO_MT_editor_menus
-
-
+import sys
+import importlib
 
 class CustomShelfRunFunction(bpy.types.Operator):
     bl_idname = "customshelf.run_function"
@@ -26,27 +26,82 @@ class CustomShelfRunFunction(bpy.types.Operator):
     folder = bpy.props.StringProperty()
     #variables = bpy.props.PointerProperty(type = bpy.types.PropertyGroup)
 
+    Types={
+    str : bpy.props.StringProperty,
+    int : bpy.props.IntProperty,
+    float : bpy.props.FloatProperty,
+    list : bpy.props.StringProperty,
+    bpy.types.Object : "objects",
+    bpy.types.Mesh : "meshes",
+    bpy.types.Camera : "cameras",
+    bpy.types.Curve : "curves",
+    bpy.types.Text : "texts",
+    bpy.types.Image : "images",
+    bpy.types.Texture : "textures",
+    bpy.types.Material : "materials",
+    bpy.types.Scene : "scenes",
+    bpy.types.World : "worlds",
+    bpy.types.ParticleSystems : "particules",
+    bpy.types.Action : "actions",
+    bpy.types.Armature : "armatures",
+    }
 
     def execute(self,context) :
         exec('from .shelves.%s import %s'%(self.folder,self.script))
-        for v in self.variables :
-            self.variables[v] = context.scene.CustomShelfVars[v]
+        importlib.reload(eval(self.script))
 
-        exec('%s.main(%s)'%(self.script,self.variables))
+
+        variables={}
+        for v in self.variables :
+            variables[v] = context.scene.CustomShelf.variables[v]
+
+        exec('%s.main(%s)'%(self.script,variables))
 
         return {'FINISHED'}
 
 
     def invoke(self, context, event):
+
         exec('from .shelves.%s import %s'%(self.folder,self.script))
-        #self.variables['variables'] = exec('%s.variables'%self.script)
+        importlib.reload(eval(self.script))
+
+        print(eval('%s.variables'%self.script))
         self.variables = eval('%s.variables'%self.script)
 
-        #context.scene.CustomShelfVars={}
+        #for key,value in context.scene.CustomShelfVars.items() :
+
+
+
         for key,value in self.variables.items() :
-            print(key,value)
-            setattr(CustomShelfVariables, key, bpy.props.StringProperty())
-            exec('context.scene.CustomShelfVars.%s="%s"'%(key,value))
+
+            if type(value) in [int,float] :
+                Type  = self.Types[type(value)]
+
+                setattr(CustomShelfVariables, key, Type(default = value))
+                exec('context.scene.CustomShelf.variables.%s=%s'%(key,value))
+
+            else :
+                Type = bpy.props.StringProperty
+
+                if type(value) not in [str,list] :
+                     #'Types[type(value)][%s]'%value.name
+
+                    print(type(value))
+
+                    setattr(CustomShelfPropSearch, key, bpy.props.CollectionProperty(type=bpy.types.PropertyGroup))
+
+                    exec('context.scene.CustomShelf.prop_search.%s.clear()'%key)
+                    for item in eval('bpy.data.%s'%self.Types[type(value)]):
+
+                        exec('context.scene.CustomShelf.prop_search.%s.add().name = "%s"'%(key,item.name))
+
+                    value = value.name
+
+                elif type(value)  in [list] :
+                    value = str(value)
+
+                setattr(CustomShelfVariables, key, Type(default = value))
+                exec('context.scene.CustomShelf.variables.%s="%s"'%(key,value))
 
         #context.scene.CustomShelfVars.a='toto'
 
@@ -56,8 +111,12 @@ class CustomShelfRunFunction(bpy.types.Operator):
         layout = self.layout
         col = layout.column()
 
-        for key in self.variables :
-            col.prop(context.scene.CustomShelfVars, key, expand=True)
+        for key,value in self.variables.items() :
+            if type(value) not in [str,int,float,list]:
+                col.prop_search(context.scene.CustomShelf.variables, key, context.scene.CustomShelf.prop_search,key,text = key)
+            else :
+
+                col.prop(context.scene.CustomShelf.variables, key, expand=True,text = key)
 
 
 
@@ -165,7 +224,7 @@ bpy.props.StringProperty()
         row.operator("CustomShelf.display_stats",icon = 'LINENUMBERS_ON',text = '',emboss=False)
         row.separator()
 
-        for key,value in read_shelves().items() :
+        for key,value in sorted(read_shelves().items()) :
             row = layout.row(align=True)
             #text =' '.join([' ' for a in range(0,len(key))])
             #row.prop(context.scene.CustomShelf,key,emboss = False,text=' ')
@@ -243,25 +302,24 @@ class CustomShelfPrefs(bpy.types.AddonPreferences):
 def apply_UI_handler(dummy):
     apply_UI(True,True)
 
-class CustomShelfSettings(bpy.types.PropertyGroup) :
-    statistics = bpy.props.BoolProperty(default = False,description='Display scene statistics')
-    for key,value in read_shelves().items() :
-        items =[]
-        for p in value:
-            items.append(p)
-        separator = bpy.props.StringProperty(name='',default="|")
-        itemsSort =[]
-        for p in sorted(items):
-            exec('%s = bpy.props.BoolProperty(name="%s")'%(p,p))
-
 class CustomShelfVariables(bpy.types.PropertyGroup) :
     pass
+
+class CustomShelfPropSearch(bpy.types.PropertyGroup) :
+    pass
+
+class CustomShelfSettings(bpy.types.PropertyGroup) :
+    statistics = bpy.props.BoolProperty(default = False,description='Display scene statistics')
+    variables = bpy.props.PointerProperty(type= CustomShelfVariables)
+    prop_search = bpy.props.PointerProperty(type= CustomShelfPropSearch)
+
 
 
 
 def register():
     #bpy.utils.unregister_class(INFO_HT_header)
     bpy.utils.register_class(CustomShelfVariables)
+    bpy.utils.register_class(CustomShelfPropSearch)
     bpy.utils.register_class(CustomShelfRunFunction)
     bpy.utils.register_class(operators.DisplayStatistics)
     bpy.utils.register_class(CustomShelfPrefs)
@@ -269,7 +327,7 @@ def register():
 
 
     bpy.types.Scene.CustomShelf = bpy.props.PointerProperty(type= CustomShelfSettings)
-    bpy.types.Scene.CustomShelfVars = bpy.props.PointerProperty(type= CustomShelfVariables)
+    #bpy.types.Scene.CustomShelfVars = bpy.props.PointerProperty(type= CustomShelfVariables)
 
     try :
         apply_UI(True,True)
@@ -282,10 +340,11 @@ def register():
 
 def unregister():
     del bpy.types.Scene.CustomShelf
-    del bpy.types.Scene.CustomShelfVars
+    #del bpy.types.Scene.CustomShelfVars
     apply_UI(False,True)
 
     bpy.utils.unregister_class(CustomShelfVariables)
+    bpy.utils.unregister_class(CustomShelfPropSearch)
     bpy.utils.unregister_class(CustomShelfPrefs)
     bpy.utils.unregister_class(CustomShelfSettings)
     bpy.utils.unregister_class(operators.DisplayStatistics)

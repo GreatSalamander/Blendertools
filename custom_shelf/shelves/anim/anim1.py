@@ -1,15 +1,23 @@
 
+import bpy
 
 variables =  {
-'a' : 'toto',
-'b' : 'tata',
+'string' : 'toto',
+'integer' : 1,
+'float_value' : 0.5,
+'object' : bpy.context.object,
+'data' : bpy.context.object.data,
+'scene' : bpy.context.scene,
+'list' : bpy.context.selected_objects,
+
+
 }
 
-import bpy
+
 
 
 def main(variables) :
 
-    print(variables['a'],variables['b'])
+    print(variables['string'],variables['object'])
 
 main(variables)
