@@ -1,0 +1,8 @@
+QFrame{
+  background-color:rgb(80, 80, 80);
+
+}
+
+QComboBox {
+  border-top-width : 0px;border-left-width : 0px;border-right-width : 0px;
+}
